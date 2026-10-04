@@ -21,6 +21,22 @@
 
 ---
 
+## Báo cáo Phân rã Độ trễ (Latency Breakdown Report — Bonus +2)
+
+Bảng phân rã chi tiết thời gian thực thi từng giai đoạn của Production RAG Pipeline (tổng thời gian: **892.9s**):
+
+| Giai đoạn Pipeline | Module thực thi | Quy mô xử lý | Thời gian (s) | Tỷ trọng (%) | Nhận xét tối ưu hóa |
+|-------------------|-----------------|--------------|---------------|--------------|----------------------|
+| **1. Document Chunking** | M1: `chunk_hierarchical()` | 26 docs $\rightarrow$ 104 chunks | **0.1s** | < 0.1% | Xử lý CPU cực nhanh, cấu trúc cha con (2048/256 chars) tạo ra 104 đơn vị ngữ nghĩa chuẩn. |
+| **2. Chunk Enrichment** | M5: `_enrich_single_call()` | 104 chunks (1 LLM call/chunk) | **300.5s** | 33.7% | Tối ưu hóa gom 4 tác vụ vào 1 request GPT-4o-mini; trung bình ~2.8s/chunk. |
+| **3. Hybrid Indexing** | M2: BM25 + Qdrant Dense | 104 chunks $\times$ 1024 dims | **73.0s** | 8.2% | Thời gian chủ yếu do mã hóa vector dense bằng `BAAI/bge-m3` trên CPU/GPU. |
+| **4. Reranker Loading** | M3: `CrossEncoderReranker` | Model weights checkpoint | **2.1s** | 0.2% | Tải trọng số `BAAI/bge-reranker-v2-m3` vào bộ nhớ. |
+| **5. Query & Generation** | M2 Search + M3 Rerank + LLM | 20 test queries $\rightarrow$ Top-3 context | **484.4s** | 54.2% | Bao gồm tìm kiếm lai, cross-attention reranking và gọi LLM sinh câu trả lời bám sát ngữ cảnh. |
+| **6. RAGAS Evaluation** | M4: `evaluate_ragas()` | 4 metrics $\times$ 20 Q&A pairs | **32.8s** | 3.7% | Đánh giá song song bằng LLM Judge trên 80 tiêu chí độc lập. |
+| **Tổng cộng (Total)** | **End-to-End Pipeline** | **20 câu hỏi hoàn chỉnh** | **892.9s** | **100%** | **Pipeline vận hành ổn định, không lỗi kết nối.** |
+
+---
+
 ## Phần 2: Khó khăn & Cách giải quyết (Challenges & Debugging)
 
 Trong quá trình thực hiện bài lab, tôi đã gặp và giải quyết các bài toán kỹ thuật sau:
